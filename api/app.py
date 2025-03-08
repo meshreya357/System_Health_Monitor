@@ -1,27 +1,44 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
+from flask import Flask, render_template  # Import render_template
+import psutil
+import threading
+import time
+import sys
 import os
 
-app = Flask(__name__)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))  # Go up one level
 
-#route defined
+from backend.python_scripts.send_alerts import check_system_health  # Import alert function
+
+
+app = Flask(__name__, template_folder="../frontend")  # Ensure it points to your frontend folder
+
 @app.route('/')
 def home():
-    return "API is running!"
+    return render_template('index.html')  # Serve the frontend page
 
 if __name__ == '__main__':
     app.run(debug=True)
 
-    
-# Sample endpoint to process data
-@app.route('/process', methods=['POST'])
-def process_data():
-    data = request.json
-    return jsonify({"message": "Data processed successfully!", "data": data})
+def monitor_system():
+    """ Periodically checks system health and sends alerts """
+    while True:
+        check_system_health()
+        time.sleep(10)  # Check every 10 seconds
 
-# Sample endpoint to trigger an alert
-@app.route('/send-alert', methods=['GET'])
-def send_alert():
-    return jsonify({"alert": "System health is critical!"})
+# Start monitoring system health in a separate thread
+monitor_thread = threading.Thread(target=monitor_system, daemon=True)
+monitor_thread.start()
+
+@app.route('/metrics', methods=['GET'])
+def get_metrics():
+    """ API to get system health metrics """
+    metrics = {
+        "cpu": psutil.cpu_percent(interval=1),
+        "ram": psutil.virtual_memory().percent,
+        "disk": psutil.disk_usage('/').percent
+    }
+    return jsonify(metrics)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True)
